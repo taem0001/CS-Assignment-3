@@ -18,8 +18,8 @@ class Accelerator extends Module {
 
   val addressReg = RegInit(0.U(16.W))
   val dataReg = RegInit(0.U(32.W))
-  val x = RegInit(0.U(5.W))
-  val y = RegInit(0.U(5.W))
+  val x = RegInit(0.U(8.W))
+  val y = RegInit(0.U(8.W))
 
   io.writeEnable := false.B
   io.address := 0.U(16.W)
@@ -45,7 +45,7 @@ class Accelerator extends Module {
       }
     }
     is(write) {
-      io.address := addressReg + 400.U(16.W)
+      io.address := addressReg + 400.U
       io.writeEnable := true.B
       addressReg := x + 20.U * y
       when(y < 19.U) {
@@ -54,7 +54,7 @@ class Accelerator extends Module {
         x := x + 1.U
         y := 0.U
       }
-      when(addressReg <= 399.U) {
+      when(addressReg < 399.U) {
         state := read
       }.otherwise {
         state := done
