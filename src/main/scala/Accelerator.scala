@@ -13,113 +13,100 @@ class Accelerator extends Module {
 
   })
 
-  val idle :: read :: write :: done :: black :: neighbour :: up :: down :: left :: right :: check :: Nil = Enum(11)
+  val idle :: read :: write :: done :: black :: up :: down :: left :: right :: check :: Nil = Enum(10)
   val state = RegInit(idle)
-  val x = RegInit(0.U(32.W))
-  val y = RegInit(0.U(32.W))
-  val addressReg = RegInit(0.U(32.W))
-  val dataReg = RegInit(0.U(32.W))
-  val tempX = RegInit(0.U(32.W))
-  val tempY = RegInit(0.U(32.W))
-  val isWhiteUp = true.B
-  val isWhiteDown = true.B
-  val isWhiteLeft = true.B
-  val isWhiteRight = true.B
 
+  val addressReg = RegInit(0.U(16.W))
+  val dataReg = RegInit(0.U(32.W))
+  val x = RegInit(0.U(5.W))
+  val y = RegInit(0.U(5.W))
+
+  io.writeEnable := false.B
+  io.address := 0.U(16.W)
+  io.dataWrite := dataReg
+  io.done := false.B
 
   switch(state) {
     is(idle) {
       when(io.start) {
         state := read
+        addressReg := 0.U
+        x := 0.U
+        y := 0.U
       }
     }
     is(read) {
       io.address := addressReg
-      dataReg := 0.U
-      io.dataWrite := dataReg
-      io.writeEnable := false.B
+
       when(x === 0.U || y === 0.U || x === 19.U || y === 19.U || io.dataRead === 0.U) {
         state := black
-      }.elsewhen(!(x === 0.U || y === 0.U || x === 19.U || y === 19.U) && io.dataRead === 255.U) {
-        state := neighbour
+      }.otherwise {
+        state := up
       }
+    }
+    is(write) {
+      io.address := addressReg + 400.U(16.W)
+      io.writeEnable := true.B
+      addressReg := x + 20.U * y
+      when(y < 19.U) {
+        y := y + 1.U
+      }.otherwise {
+        x := x + 1.U
+        y := 0.U
+      }
+      when(addressReg <= 399.U) {
+        state := read
+      }.otherwise {
+        state := done
+      }
+    }
+    is(done) {
+      io.done := true.B
+      state := done
     }
     is(black) {
       dataReg := 0.U
-      io.dataWrite := dataReg
       state := write
     }
-    is(write) {
-      when(addressReg <= 399.U) {
-        io.address := addressReg + 400.U
-        when (y < 19.U) {
-          y := y + 1.U
-        } .otherwise {
-          x := x + 1.U
-          y := 0.U
-        }
-        addressReg := x + 20.U * y
-        io.writeEnable := true.B
-        state := read
-      }
-      state := done
-    }
-    is(neighbour) {
-      state := up
-
-
-    }
-
     is(up) {
-      tempY := y-1.U
-      addressReg := x + 20.U * tempY
-      io.address := addressReg
-      when (io.dataRead === 255.U) {
-        isWhiteUp := true.B
+      io.address := x + 20.U * (y - 1.U)
 
-      } .otherwise {
-        isWhiteUp := false.B
+      when(io.dataRead === 255.U) {
+        state := down
+      }.otherwise {
+        state := black
       }
-      state := down
     }
     is(down) {
-      tempY := y+1.U
-      addressReg := x + 20.U * tempY
-      io.address := addressReg
-      when (io.dataRead === 255.U) {
-        isWhiteDown := true.B
+      io.address := x + 20.U * (y + 1.U)
 
-      } .otherwise {
-        isWhiteDown := false.B
+      when(io.dataRead === 255.U) {
+        state := right
+      }.otherwise {
+        state := black
       }
-      state := left
-    }
-    is(left) {
-      tempX := x-1.U
-      addressReg := tempX + 20.U * y
-      io.address := addressReg
-      when (io.dataRead === 255.U) {
-        isWhiteLeft := true.B
-
-      } .otherwise {
-        isWhiteLeft := false.B
-      }
-      state := right
     }
     is(right) {
-      tempX := x+1.U
-      addressReg := tempX + 20.U * y
-      io.address := addressReg
-      when (io.dataRead === 255.U) {
-        isWhiteRight := true.B
+      io.address := (x + 1.U) + 20.U * y
 
-      } .otherwise {
-        isWhiteRight := false.B
+      when(io.dataRead === 255.U) {
+        state := left
+      }.otherwise {
+        state := black
       }
-      state := check
     }
-    is (check) {
-      
+    is(left) {
+      io.address := (x - 1.U) + 20.U * y
+
+      when(io.dataRead === 255.U) {
+        state := check
+      }.otherwise {
+        state := black
+      }
+    }
+    is(check) {
+      dataReg := 255.U
+      state := write
     }
   }
 }
