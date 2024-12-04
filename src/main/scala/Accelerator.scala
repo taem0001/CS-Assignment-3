@@ -13,16 +13,16 @@ class Accelerator extends Module {
 
   })
 
-  val idle :: read :: write :: increment :: done :: up :: down :: left :: right :: checkUp :: checkDown :: checkLeft :: checkRight :: Nil = Enum(13)
+  val idle :: read :: write :: done :: checkUp :: checkDown :: checkLeft :: checkRight :: Nil = Enum(8)
   val state = RegInit(idle)
   val x = RegInit(0.U(5.W))
   val y = RegInit(0.U(5.W))
-  val dataReadReg = RegNext(io.dataRead)
   val dataWriteReg = RegInit(0.U(32.W))
+  val addressReg = RegInit(0.U(16.W))
 
-  io.address := 0.U
   io.writeEnable := false.B
   io.dataWrite := dataWriteReg
+  io.address := addressReg
   io.done := false.B
 
   switch(state) {
@@ -30,33 +30,29 @@ class Accelerator extends Module {
       when(io.start) {
         x := 0.U
         y := 0.U
-        io.address := 0.U
+        addressReg := 0.U
         state := read
       }
     }
     is(read) {
-      when(x === 0.U || x === 19.U || y === 0.U || y === 19.U || dataReadReg === 0.U) {
+      when(x === 0.U || x === 19.U || y === 0.U || y === 19.U || io.dataRead === 0.U) {
         dataWriteReg := 0.U
+        addressReg := (x + 20.U * y) + 400.U
         state := write
       }.otherwise {
-        state := up
+        addressReg := x + 20.U * (y - 1.U)
+        state := checkUp
       }
     }
     is(write) {
-      io.dataWrite := dataWriteReg
-      io.address := (x + 20.U * y) + 400.U
       io.writeEnable := true.B
-      state := increment
-    }
-    is(increment) {
       when(y < 19.U) {
         y := y + 1.U
       }.otherwise {
         x := x + 1.U
         y := 0.U
       }
-      io.address := x + 20.U * y
-
+      addressReg := x + 20.U * y
       when(x < 20.U && y < 20.U) {
         state := read
       }.otherwise {
@@ -67,48 +63,39 @@ class Accelerator extends Module {
       io.done := true.B
       state := done
     }
-    is(up) {
-      io.address := x + 20.U * (y - 1.U)
-      state := checkUp
-    }
     is(checkUp) {
-      when(dataReadReg === 255.U) {
-        state := down
+      when(io.dataRead === 255.U) {
+        addressReg := x + 20.U * (y + 1.U)
+        state := checkDown
       }.otherwise {
         dataWriteReg := 0.U
+        addressReg := (x + 20.U * y) + 400.U
         state := write
       }
-    }
-    is(down) {
-      io.address := x + 20.U * (y + 1.U)
-      state := checkDown
     }
     is(checkDown) {
-      when(dataReadReg === 255.U) {
-        state := left
+      when(io.dataRead === 255.U) {
+        addressReg := (x - 1.U) + 20.U * y
+        state := checkLeft
       }.otherwise {
         dataWriteReg := 0.U
+        addressReg := (x + 20.U * y) + 400.U
         state := write
       }
-    }
-    is(left) {
-      io.address := (x - 1.U) + 20.U * y
-      state := checkLeft
     }
     is(checkLeft) {
-      when(dataReadReg === 255.U) {
-        state := right
+      when(io.dataRead === 255.U) {
+        addressReg := (x + 1.U) + 20.U * y
+        state := checkRight
       }.otherwise {
         dataWriteReg := 0.U
+        addressReg := (x + 20.U * y) + 400.U
         state := write
       }
     }
-    is(right) {
-      io.address := (x + 1.U) + 20.U * y
-      state := checkRight
-    }
     is(checkRight) {
-      when(dataReadReg === 255.U) {
+      addressReg := (x + 20.U * y) + 400.U
+      when(io.dataRead === 255.U) {
         dataWriteReg := 255.U
         state := write
       }.otherwise {
